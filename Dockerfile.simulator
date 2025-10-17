@@ -1,0 +1,28 @@
+FROM golang:1.22-alpine AS builder
+
+WORKDIR /app
+
+# Copy the simulator directory
+COPY scripts/simulator/ ./
+
+# Build the simulator
+RUN go mod init simulator 2>/dev/null || true && \
+    go mod tidy && \
+    CGO_ENABLED=0 go build -o simulator main.go
+
+FROM alpine:latest
+
+WORKDIR /app
+
+# Copy the built binary
+COPY --from=builder /app/simulator .
+
+# Default environment variables
+ENV INGEST_URL=http://ingestion-service:8081/api/ingest
+ENV RPS=20
+ENV ORG_ID=1
+ENV DURATION=24h
+ENV CONCURRENCY=5
+
+# Run the simulator
+CMD ["sh", "-c", "./simulator -url=${INGEST_URL} -duration=${DURATION} -rps=${RPS} -concurrency=${CONCURRENCY} -org=${ORG_ID}"]

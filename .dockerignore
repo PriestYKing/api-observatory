@@ -1,0 +1,68 @@
+# Git
+.git
+.gitignore
+.gitattributes
+
+# Documentation
+README.md
+LICENSE
+*.md
+docs/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.editorconfig
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Node
+**/node_modules/
+**/.next/
+**/dist/
+**/build/
+**/.turbo/
+**/coverage/
+**/.npm/
+**/.eslintcache
+
+# Go
+**/*.exe
+**/*.exe~
+**/*.dll
+**/*.so
+**/*.dylib
+**/*.test
+**/*.out
+**/vendor/
+**/*.coverprofile
+
+# Environment
+.env.local
+.env.*.local
+**/*.log
+
+# Docker (but keep Dockerfile and docker-compose.yml in context)
+.dockerignore
+
+# Scripts (keep them)
+# scripts/
+
+# Database
+**/*.db
+**/*.sqlite
+**/*.sql.gz
+
+# Temporary files
+**/tmp/
+**/temp/
+**/.cache/
+
+# Build artifacts (except what we need)
+# Keep the source files we need to copy

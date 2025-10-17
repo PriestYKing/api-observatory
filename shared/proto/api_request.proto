@@ -1,0 +1,41 @@
+syntax = "proto3";
+
+package observatory;
+
+option go_package = "github.com/yourusername/api-observatory/proto";
+
+// Ingestion Service
+service IngestionService {
+  rpc IngestRequest(APIRequest) returns (IngestResponse);
+  rpc IngestBatch(stream APIRequest) returns (IngestResponse);
+  rpc GetHealthStatus(HealthRequest) returns (HealthResponse);
+}
+
+message APIRequest {
+  string request_id = 1;
+  string organization_id = 2;
+  int64 timestamp = 3;
+  string provider = 4;
+  string endpoint = 5;
+  string method = 6;
+  int32 status_code = 7;
+  int32 latency_ms = 8;
+  int32 request_size_bytes = 9;
+  int32 response_size_bytes = 10;
+  string error_message = 11;
+  map<string, string> metadata = 12;
+}
+
+message IngestResponse {
+  bool success = 1;
+  string message = 2;
+  string request_id = 3;
+}
+
+message HealthRequest {}
+
+message HealthResponse {
+  string status = 1;
+  int64 requests_processed = 2;
+  string uptime = 3;
+}

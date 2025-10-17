@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package observatory;
+
+option go_package = "github.com/yourusername/api-observatory/proto";
+
+// Analytics Service
+service AnalyticsService {
+  rpc DetectDuplicates(DuplicateRequest) returns (DuplicateResponse);
+  rpc AnalyzeCacheOpportunities(CacheAnalysisRequest) returns (CacheAnalysisResponse);
+  rpc DetectAnomalies(AnomalyRequest) returns (AnomalyResponse);
+  rpc GetOptimizationRecommendations(OptimizationRequest) returns (OptimizationResponse);
+}
+
+message DuplicateRequest {
+  string organization_id = 1;
+  int64 time_window_seconds = 2;
+}
+
+message DuplicateResponse {
+  repeated DuplicateGroup duplicates = 1;
+  double potential_savings = 2;
+}
+
+message DuplicateGroup {
+  string endpoint = 1;
+  int32 count = 2;
+  double cost = 3;
+  int64 first_seen = 4;
+  int64 last_seen = 5;
+}
+
+message CacheAnalysisRequest {
+  string organization_id = 1;
+  int64 time_window_seconds = 2;
+}
+
+message CacheAnalysisResponse {
+  repeated CacheRecommendation recommendations = 1;
+  double total_potential_savings = 2;
+}
+
+message CacheRecommendation {
+  string endpoint = 1;
+  double cache_hit_ratio = 2;
+  double potential_savings = 3;
+  string recommendation = 4;
+}
+
+message AnomalyRequest {
+  string organization_id = 1;
+}
+
+message AnomalyResponse {
+  repeated Anomaly anomalies = 1;
+}
+
+message Anomaly {
+  string type = 1;
+  string severity = 2;
+  string description = 3;
+  int64 detected_at = 4;
+}
+
+message OptimizationRequest {
+  string organization_id = 1;
+}
+
+message OptimizationResponse {
+  repeated Optimization optimizations = 1;
+  double total_potential_savings = 2;
+}
+
+message Optimization {
+  string type = 1;
+  string title = 2;
+  string description = 3;
+  double potential_savings = 4;
+  string priority = 5;
+}

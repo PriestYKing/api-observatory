@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package observatory;
+
+option go_package = "github.com/yourusername/api-observatory/proto";
+
+// Cost Tracker Service
+service CostTrackerService {
+  rpc GetCostBreakdown(CostRequest) returns (CostResponse);
+  rpc GetProviderComparison(ComparisonRequest) returns (ComparisonResponse);
+  rpc SetBudgetAlert(BudgetAlertRequest) returns (BudgetAlertResponse);
+}
+
+message CostRequest {
+  string organization_id = 1;
+  int64 start_time = 2;
+  int64 end_time = 3;
+  string group_by = 4; // "provider", "endpoint", "hour", "day"
+}
+
+message CostResponse {
+  repeated CostBreakdown breakdown = 1;
+  double total_cost = 2;
+  int64 total_requests = 3;
+}
+
+message CostBreakdown {
+  string label = 1;
+  double cost = 2;
+  int64 request_count = 3;
+  double avg_latency = 4;
+  int32 error_count = 5;
+}
+
+message ComparisonRequest {
+  string organization_id = 1;
+  string current_provider = 2;
+  repeated string alternative_providers = 3;
+}
+
+message ComparisonResponse {
+  repeated ProviderCost providers = 1;
+  string recommendation = 2;
+}
+
+message ProviderCost {
+  string provider = 1;
+  double estimated_cost = 2;
+  double cost_difference = 3;
+  string performance_notes = 4;
+}
+
+message BudgetAlertRequest {
+  string organization_id = 1;
+  double monthly_budget = 2;
+  double alert_threshold = 3;
+}
+
+message BudgetAlertResponse {
+  bool success = 1;
+  string message = 2;
+}

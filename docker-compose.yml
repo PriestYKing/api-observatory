@@ -1,0 +1,271 @@
+version: "3.9"
+
+# Shared configurations
+x-restart-policy: &restart-policy
+  restart: unless-stopped
+
+x-healthcheck-defaults: &healthcheck-defaults
+  interval: 10s
+  timeout: 5s
+  retries: 5
+  start_period: 10s
+
+x-go-service-env: &go-service-env
+  DATABASE_URL: postgresql://postgres:postgres@timescaledb:5432/api_observatory?sslmode=disable
+  REDIS_URL: redis:6379
+  TZ: Asia/Kolkata
+
+services:
+  ###################
+  # Infrastructure
+  ###################
+  timescaledb:
+    image: timescale/timescaledb:latest-pg16
+    container_name: api-observatory-timescaledb
+    <<: *restart-policy
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: api_observatory
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD-SHELL", "pg_isready -U postgres -d api_observatory"]
+    networks:
+      - api-observatory-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: api-observatory-redis
+    <<: *restart-policy
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      <<: *healthcheck-defaults
+      test: ["CMD", "redis-cli", "ping"]
+    networks:
+      - api-observatory-network
+
+  ###################
+  # Backend Services
+  ###################
+  ingestion-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: ingestion-service
+    image: api-observatory/ingestion:latest
+    container_name: api-observatory-ingestion
+    <<: *restart-policy
+    environment:
+      <<: *go-service-env
+      GRPC_PORT: 50051
+      HTTP_PORT: 8081
+      SERVICE_NAME: ingestion
+      LOG_LEVEL: info
+    ports:
+      - "50051:50051"
+      - "8081:8081"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - api-observatory-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+
+  analytics-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: analytics-service
+
+    image: api-observatory/analytics:latest
+    container_name: api-observatory-analytics
+    <<: *restart-policy
+    environment:
+      <<: *go-service-env
+      GRPC_PORT: 50052
+      SERVICE_NAME: analytics
+      LOG_LEVEL: info
+      ANALYSIS_INTERVAL: 5m
+    ports:
+      - "50052:50052"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - api-observatory-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+
+  cost-tracker-service:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: cost-tracker-service
+
+    image: api-observatory/cost-tracker:latest
+    container_name: api-observatory-cost-tracker
+    <<: *restart-policy
+    environment:
+      <<: *go-service-env
+      GRPC_PORT: 50053
+      SERVICE_NAME: cost-tracker
+      LOG_LEVEL: info
+      AGGREGATION_INTERVAL: 1m
+    ports:
+      - "50053:50053"
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - api-observatory-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: api-gateway
+
+    image: api-observatory/gateway:latest
+    container_name: api-observatory-gateway
+    <<: *restart-policy
+    environment:
+      REDIS_URL: redis:6379
+      INGESTION_SERVICE_URL: ingestion-service:50051
+      ANALYTICS_SERVICE_URL: analytics-service:50052
+      COST_TRACKER_SERVICE_URL: cost-tracker-service:50053
+      PORT: 8080
+      SERVICE_NAME: api-gateway
+      LOG_LEVEL: info
+      CORS_ORIGINS: http://localhost:3000,http://dashboard:3000
+      TZ: Asia/Kolkata
+    ports:
+      - "8080:8080"
+    depends_on:
+      ingestion-service:
+        condition: service_started
+      analytics-service:
+        condition: service_started
+      cost-tracker-service:
+        condition: service_started
+      redis:
+        condition: service_healthy
+    networks:
+      - api-observatory-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 256M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+
+  ###################
+  # Frontend
+  ###################
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dashboard
+      args:
+        NEXT_PUBLIC_API_GATEWAY_URL: http://localhost:8080
+        NEXT_PUBLIC_WS_URL: ws://localhost:8080/ws
+    image: api-observatory/dashboard:latest
+    container_name: api-observatory-dashboard
+    <<: *restart-policy
+    environment:
+      NODE_ENV: production
+      # Runtime environment variables (these work in standalone mode)
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+    ports:
+      - "3000:3000"
+    depends_on:
+      api-gateway:
+        condition: service_started
+    networks:
+      - api-observatory-network
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 256M
+
+  traffic-simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile.simulator
+    container_name: api-observatory-simulator
+    restart: unless-stopped
+    environment:
+      INGEST_URL: http://ingestion-service:8081/api/ingest
+      RPS: 20
+      ORG_ID: "1"
+    depends_on:
+      - ingestion-service
+    networks:
+      - api-observatory-network
+
+###################
+# Volumes
+###################
+volumes:
+  timescale_data:
+    driver: local
+    name: api-observatory-timescale-data
+  redis_data:
+    driver: local
+    name: api-observatory-redis-data
+
+###################
+# Networks
+###################
+networks:
+  api-observatory-network:
+    name: api-observatory-network
+    driver: bridge
+    ipam:
+      driver: default
+      config:
+        - subnet: 172.28.0.0/16
