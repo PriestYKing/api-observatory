@@ -15,7 +15,7 @@ Monitor, analyze, and optimize SaaS/API usage with plug-and-play multi-service b
 
 ## Quick Start
 - Clone the repo
-- git clone https://github.com/YOUR_ORG/api-observatory.git
+- git clone https://github.com/PriestYKing/api-observatory.git
 - cd api-observatory
 
 - Copy and edit env vars
